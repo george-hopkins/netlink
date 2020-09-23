@@ -5,8 +5,10 @@ pub use crate::utils::nla::{DefaultNla, NlaBuffer, NlasIterator};
 
 use crate::{
     constants::*,
+    nlas::BpfStorageRequestNla,
     parsers::{parse_string, parse_u32, parse_u8},
     traits::{Emitable, Parseable},
+    utils::nla::NLA_F_NESTED,
     DecodeError,
 };
 
@@ -210,6 +212,76 @@ impl Emitable for MemInfo {
         buf.set_options(self.options);
         buf.set_backlog_queue_length(self.backlog_queue_length);
         buf.set_drops(self.drops);
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum RequestNla {
+    /// Filter
+    Bytecode(Vec<u8>),
+    /// Request dump of bpf_sk_storage
+    BpfStorages(Vec<BpfStorageRequestNla>),
+    /// Wide protocol number
+    Protocol(u32),
+    /// Other attribute
+    Other(DefaultNla),
+}
+
+impl crate::utils::nla::Nla for RequestNla {
+    fn value_len(&self) -> usize {
+        use self::RequestNla::*;
+        match *self {
+            Bytecode(ref code) => code.len(),
+            BpfStorages(ref nested) => nested.as_slice().buffer_len(),
+            Protocol(_) => 4,
+            Other(ref attr) => attr.value_len(),
+        }
+    }
+
+    fn emit_value(&self, buffer: &mut [u8]) {
+        use self::RequestNla::*;
+        match *self {
+            Bytecode(ref code) => buffer[..code.len()].copy_from_slice(&code[..]),
+            BpfStorages(ref nested) => nested.as_slice().emit(buffer),
+            Protocol(value) => NativeEndian::write_u32(buffer, value),
+            Other(ref attr) => attr.emit_value(buffer),
+        }
+    }
+
+    fn kind(&self) -> u16 {
+        use self::RequestNla::*;
+        match *self {
+            Bytecode(_) => INET_DIAG_REQ_BYTECODE,
+            BpfStorages(_) => INET_DIAG_REQ_SK_BPF_STORAGES | NLA_F_NESTED,
+            Protocol(_) => INET_DIAG_REQ_PROTOCOL,
+            Other(ref attr) => attr.kind(),
+        }
+    }
+}
+
+impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<NlaBuffer<&'a T>> for RequestNla {
+    fn parse(buf: &NlaBuffer<&'a T>) -> Result<Self, DecodeError> {
+        let payload = buf.value();
+        Ok(match buf.kind() {
+            INET_DIAG_REQ_BYTECODE => Self::Bytecode(payload.to_vec()),
+            INET_DIAG_REQ_SK_BPF_STORAGES => {
+                let err = "invalid INET_DIAG_REQ_SK_BPF_STORAGES value";
+                if !buf.nested_flag() {
+                    return Err(err.into());
+                }
+                let mut nested = vec![];
+                for nla_buf in NlasIterator::new(payload) {
+                    nested.push(BpfStorageRequestNla::parse(&nla_buf.context(err)?).context(err)?);
+                }
+                Self::BpfStorages(nested)
+            }
+            INET_DIAG_REQ_PROTOCOL => {
+                Self::Protocol(parse_u32(payload).context("invalid INET_DIAG_REQ_PROTOCOL value")?)
+            }
+            kind => {
+                Self::Other(DefaultNla::parse(buf).context(format!("unknown NLA type {}", kind))?)
+            }
+        })
     }
 }
 

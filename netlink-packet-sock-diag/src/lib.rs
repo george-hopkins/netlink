@@ -21,6 +21,7 @@ pub mod buffer;
 pub mod constants;
 pub mod inet;
 pub mod message;
+pub mod nlas;
 pub mod unix;
 pub use self::buffer::*;
 pub use self::constants::*;

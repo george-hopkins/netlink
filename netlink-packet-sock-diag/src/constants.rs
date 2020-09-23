@@ -44,55 +44,57 @@ pub const AF_CAIF: u8 = libc::AF_CAIF as u8;
 pub const AF_ALG: u8 = libc::AF_ALG as u8;
 
 /// Dummy protocol for TCP
-pub const IPPROTO_IP: u8 = 0;
+pub const IPPROTO_IP: u16 = 0;
 /// Internet Control Message Protocol
-pub const IPPROTO_ICMP: u8 = 1;
+pub const IPPROTO_ICMP: u16 = 1;
 /// Internet Group Management Protocol
-pub const IPPROTO_IGMP: u8 = 2;
+pub const IPPROTO_IGMP: u16 = 2;
 /// IPIP tunnels (older KA9Q tunnels use 94)
-pub const IPPROTO_IPIP: u8 = 4;
+pub const IPPROTO_IPIP: u16 = 4;
 /// Transmission Control Protocol
-pub const IPPROTO_TCP: u8 = 6;
+pub const IPPROTO_TCP: u16 = 6;
 /// Exterior Gateway Protocol
-pub const IPPROTO_EGP: u8 = 8;
+pub const IPPROTO_EGP: u16 = 8;
 /// PUP protocol
-pub const IPPROTO_PUP: u8 = 12;
+pub const IPPROTO_PUP: u16 = 12;
 /// User Datagram Protocol
-pub const IPPROTO_UDP: u8 = 17;
+pub const IPPROTO_UDP: u16 = 17;
 /// XNS IDP protocol
-pub const IPPROTO_IDP: u8 = 22;
+pub const IPPROTO_IDP: u16 = 22;
 /// SO Transport Protocol Class 4
-pub const IPPROTO_TP: u8 = 29;
+pub const IPPROTO_TP: u16 = 29;
 /// Datagram Congestion Control Protocol
-pub const IPPROTO_DCCP: u8 = 33;
+pub const IPPROTO_DCCP: u16 = 33;
 /// IPv6 header
-pub const IPPROTO_IPV6: u8 = 41;
+pub const IPPROTO_IPV6: u16 = 41;
 /// Reservation Protocol
-pub const IPPROTO_RSVP: u8 = 46;
+pub const IPPROTO_RSVP: u16 = 46;
 /// General Routing Encapsulation
-pub const IPPROTO_GRE: u8 = 47;
+pub const IPPROTO_GRE: u16 = 47;
 /// encapsulating security payload
-pub const IPPROTO_ESP: u8 = 50;
+pub const IPPROTO_ESP: u16 = 50;
 /// authentication header
-pub const IPPROTO_AH: u8 = 51;
+pub const IPPROTO_AH: u16 = 51;
 /// Multicast Transport Protocol
-pub const IPPROTO_MTP: u8 = 92;
+pub const IPPROTO_MTP: u16 = 92;
 /// IP option pseudo header for BEET
-pub const IPPROTO_BEETPH: u8 = 94;
+pub const IPPROTO_BEETPH: u16 = 94;
 /// Encapsulation Header
-pub const IPPROTO_ENCAP: u8 = 98;
+pub const IPPROTO_ENCAP: u16 = 98;
 /// Protocol Independent Multicast
-pub const IPPROTO_PIM: u8 = 103;
+pub const IPPROTO_PIM: u16 = 103;
 /// Compression Header Protocol
-pub const IPPROTO_COMP: u8 = 108;
+pub const IPPROTO_COMP: u16 = 108;
 /// Stream Control Transmission Protocol
-pub const IPPROTO_SCTP: u8 = 132;
+pub const IPPROTO_SCTP: u16 = 132;
 /// UDP-Lite protocol
-pub const IPPROTO_UDPLITE: u8 = 136;
+pub const IPPROTO_UDPLITE: u16 = 136;
 /// MPLS in IP
-pub const IPPROTO_MPLS: u8 = 137;
+pub const IPPROTO_MPLS: u16 = 137;
 /// Raw IP packets
-pub const IPPROTO_RAW: u8 = 255;
+pub const IPPROTO_RAW: u16 = 255;
+/// Multipath TCP
+pub const IPPROTO_MPTCP: u16 = 262;
 /// IPv6 Hop-by-Hop options
 pub const IPPROTO_HOPOPTS: u8 = 0;
 /// IPv6 routing header
@@ -108,7 +110,16 @@ pub const IPPROTO_DSTOPTS: u8 = 60;
 /// IPv6 mobility header
 pub const IPPROTO_MH: u8 = 135;
 
+// Generic NLAs
+pub const SK_DIAG_BPF_STORAGE_REQ_NONE: u16 = 0;
+pub const SK_DIAG_BPF_STORAGE_REQ_MAP_FD: u16 = 1;
+
 // Extensions for inet
+pub const INET_DIAG_REQ_NONE: u16 = 0;
+pub const INET_DIAG_REQ_BYTECODE: u16 = 1;
+pub const INET_DIAG_REQ_SK_BPF_STORAGES: u16 = 2;
+pub const INET_DIAG_REQ_PROTOCOL: u16 = 3;
+
 pub const INET_DIAG_NONE: u16 = 0;
 pub const INET_DIAG_MEMINFO: u16 = 1;
 pub const INET_DIAG_INFO: u16 = 2;

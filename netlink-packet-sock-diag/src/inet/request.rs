@@ -2,30 +2,34 @@ use anyhow::Context;
 
 use crate::{
     constants::*,
-    inet::{SocketId, SocketIdBuffer},
+    inet::{
+        nlas::{NlaBuffer, NlasIterator, RequestNla},
+        SocketId, SocketIdBuffer,
+    },
     traits::{Emitable, Parseable, ParseableParametrized},
     DecodeError,
 };
 
-pub const REQUEST_LEN: usize = 56;
+pub(crate) const REQUEST_MIN_LEN: usize = 56;
 
-buffer!(InetRequestBuffer(REQUEST_LEN) {
+buffer!(InetRequestBuffer(REQUEST_MIN_LEN) {
     family: (u8, 0),
     protocol: (u8, 1),
     extensions: (u8, 2),
     pad: (u8, 3),
     states: (u32, 4..8),
     socket_id: (slice, 8..56),
+    payload: (slice, REQUEST_MIN_LEN..),
 });
 
 /// A request for Ipv4 and Ipv6 sockets
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct InetRequest {
+pub struct InetRequestHeader {
     /// The address family, either `AF_INET` or `AF_INET6`
     pub family: u8,
     /// The IP protocol. This field should be set to one of the
     /// `IPPROTO_*` constants
-    pub protocol: u8,
+    pub protocol: u32,
     /// Set of flags defining what kind of extended information to
     /// report. Each requested kind of information is reported back as
     /// a netlink attribute.
@@ -103,7 +107,7 @@ bitflags! {
     }
 }
 
-impl<'a, T: AsRef<[u8]> + 'a> Parseable<InetRequestBuffer<&'a T>> for InetRequest {
+impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<InetRequestBuffer<&'a T>> for InetRequestHeader {
     fn parse(buf: &InetRequestBuffer<&'a T>) -> Result<Self, DecodeError> {
         let err = "invalid socket_id value";
         let socket_id = SocketId::parse_with_param(
@@ -114,7 +118,7 @@ impl<'a, T: AsRef<[u8]> + 'a> Parseable<InetRequestBuffer<&'a T>> for InetReques
 
         Ok(Self {
             family: buf.family(),
-            protocol: buf.protocol(),
+            protocol: buf.protocol() as u32,
             extensions: ExtensionFlags::from_bits_truncate(buf.extensions()),
             states: StateFlags::from_bits_truncate(buf.states()),
             socket_id,
@@ -122,18 +126,81 @@ impl<'a, T: AsRef<[u8]> + 'a> Parseable<InetRequestBuffer<&'a T>> for InetReques
     }
 }
 
-impl Emitable for InetRequest {
+impl Emitable for InetRequestHeader {
     fn buffer_len(&self) -> usize {
-        REQUEST_LEN
+        if self.protocol > 0xff {
+            REQUEST_MIN_LEN + RequestNla::Protocol(self.protocol).buffer_len()
+        } else {
+            REQUEST_MIN_LEN
+        }
     }
 
     fn emit(&self, buf: &mut [u8]) {
         let mut buf = InetRequestBuffer::new(buf);
         buf.set_family(self.family);
-        buf.set_protocol(self.protocol);
+        buf.set_protocol(self.protocol as u8);
         buf.set_extensions(self.extensions.bits());
         buf.set_pad(0);
         buf.set_states(self.states.bits());
-        self.socket_id.emit(buf.socket_id_mut())
+        self.socket_id.emit(buf.socket_id_mut());
+        if self.protocol > 0xff {
+            RequestNla::Protocol(self.protocol).emit(buf.payload_mut())
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct InetRequest {
+    pub header: InetRequestHeader,
+    pub nlas: Vec<RequestNla>,
+}
+
+impl InetRequest {
+    pub fn protocol(&self) -> u32 {
+        self.nlas
+            .iter()
+            .find_map(|n| match n {
+                RequestNla::Protocol(protocol) => Some(*protocol),
+                _ => None,
+            })
+            .unwrap_or(self.header.protocol as u32)
+    }
+}
+
+impl<'a, T: AsRef<[u8]> + ?Sized> InetRequestBuffer<&'a T> {
+    pub fn nlas(&self) -> impl Iterator<Item = Result<NlaBuffer<&'a [u8]>, DecodeError>> {
+        NlasIterator::new(self.payload())
+    }
+}
+
+impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<InetRequestBuffer<&'a T>> for Vec<RequestNla> {
+    fn parse(buf: &InetRequestBuffer<&'a T>) -> Result<Self, DecodeError> {
+        let mut nlas = vec![];
+        for nla_buf in buf.nlas() {
+            nlas.push(RequestNla::parse(&nla_buf?)?);
+        }
+        Ok(nlas)
+    }
+}
+
+impl<'a, T: AsRef<[u8]> + ?Sized> Parseable<InetRequestBuffer<&'a T>> for InetRequest {
+    fn parse(buf: &InetRequestBuffer<&'a T>) -> Result<Self, DecodeError> {
+        Ok(Self {
+            header: InetRequestHeader::parse(buf).context("failed to parse inet request header")?,
+            nlas: Vec::<RequestNla>::parse(buf).context("failed to parse inet request NLAs")?,
+        })
+    }
+}
+
+impl Emitable for InetRequest {
+    fn buffer_len(&self) -> usize {
+        self.header.buffer_len() + self.nlas.as_slice().buffer_len()
+    }
+
+    fn emit(&self, buffer: &mut [u8]) {
+        self.header.emit(buffer);
+        self.nlas
+            .as_slice()
+            .emit(&mut buffer[self.header.buffer_len()..]);
     }
 }

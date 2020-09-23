@@ -1,6 +1,6 @@
 use netlink_packet_sock_diag::{
     constants::*,
-    inet::{ExtensionFlags, InetRequest, SocketId, StateFlags},
+    inet::{ExtensionFlags, InetRequest, InetRequestHeader, SocketId, StateFlags},
     NetlinkHeader, NetlinkMessage, NetlinkPayload, SockDiagMessage,
 };
 use netlink_sys::{Protocol, Socket, SocketAddr};
@@ -16,11 +16,14 @@ fn main() {
             ..Default::default()
         },
         payload: SockDiagMessage::InetRequest(InetRequest {
-            family: AF_INET,
-            protocol: IPPROTO_TCP.into(),
-            extensions: ExtensionFlags::empty(),
-            states: StateFlags::all(),
-            socket_id: SocketId::new_v4(),
+            header: InetRequestHeader {
+                family: AF_INET,
+                protocol: IPPROTO_TCP.into(),
+                extensions: ExtensionFlags::empty(),
+                states: StateFlags::all(),
+                socket_id: SocketId::new_v4(),
+            },
+            nlas: vec![],
         })
         .into(),
     };

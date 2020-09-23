@@ -6,7 +6,8 @@ use std::{
 use crate::{
     constants::*,
     inet::{
-        nlas::Nla, ExtensionFlags, InetRequest, InetRequestBuffer, InetResponse,
+        nlas::{Nla, RequestNla},
+        ExtensionFlags, InetRequest, InetRequestBuffer, InetRequestHeader, InetResponse,
         InetResponseBuffer, InetResponseHeader, SocketId, StateFlags, Timer,
     },
     traits::{Emitable, Parseable},
@@ -14,11 +15,14 @@ use crate::{
 
 lazy_static! {
     static ref REQ_UDP: InetRequest = InetRequest {
-        family: AF_INET as u8,
-        protocol: IPPROTO_UDP,
-        extensions: ExtensionFlags::empty(),
-        states: StateFlags::ESTABLISHED,
-        socket_id: SocketId::new_v4(),
+        header: InetRequestHeader {
+            family: AF_INET as u8,
+            protocol: IPPROTO_UDP.into(),
+            extensions: ExtensionFlags::empty(),
+            states: StateFlags::ESTABLISHED,
+            socket_id: SocketId::new_v4(),
+        },
+        nlas: vec![],
     };
 }
 
@@ -126,4 +130,67 @@ fn emit_tcp_resp() {
     let mut buf = vec![0; RESP_TCP.buffer_len()];
     RESP_TCP.emit(&mut buf);
     assert_eq!(&buf[..], &RESP_TCP_BUF[..]);
+}
+
+lazy_static! {
+    static ref REQ_MPTCP: InetRequest = InetRequest {
+        header: InetRequestHeader {
+            family: AF_INET,
+            protocol: IPPROTO_MPTCP.into(),
+            extensions: ExtensionFlags::empty(),
+            states: StateFlags::ESTABLISHED,
+            socket_id: SocketId::new_v4(),
+        },
+        nlas: vec![],
+    };
+    static ref REQ_MPTCP_NORMALIZED: InetRequest = InetRequest {
+        header: InetRequestHeader {
+            family: AF_INET,
+            protocol: IPPROTO_TCP.into(),
+            extensions: ExtensionFlags::empty(),
+            states: StateFlags::ESTABLISHED,
+            socket_id: SocketId::new_v4(),
+        },
+        nlas: vec![RequestNla::Protocol(IPPROTO_MPTCP.into())],
+    };
+}
+
+#[rustfmt::skip]
+static REQ_MPTCP_BUF: [u8; 64] = [
+    0x02, // family (AF_INET)
+    0x06, // protocol (IPPROTO_TCP)
+    0x00, // extensions
+    0x00, // padding
+    0x02, 0x00, 0x00, 0x00, // states
+
+    // socket id
+    0x00, 0x00, // source port
+    0x00, 0x00, // destination port
+    // source address
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    // destination address
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, // interface id
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // cookie
+
+    // NLAs
+    0x08, 0x00, 0x03, 0x00, 0x06, 0x01, 0x00, 0x00, // wide protocol number (IPPROTO_MPTCP)
+];
+
+#[test]
+fn parse_mptcp_req() {
+    let parsed =
+        InetRequest::parse(&InetRequestBuffer::new_checked(&&REQ_MPTCP_BUF[..]).unwrap()).unwrap();
+    assert_eq!(parsed, *REQ_MPTCP_NORMALIZED);
+    assert_eq!(parsed.protocol(), IPPROTO_MPTCP.into());
+}
+
+#[test]
+fn emit_mptcp_req() {
+    assert_eq!(REQ_MPTCP.buffer_len(), 64);
+    let mut buf = vec![0; REQ_MPTCP.buffer_len()];
+    REQ_MPTCP.emit(&mut buf);
+    assert_eq!(&buf[..], &REQ_MPTCP_BUF[..]);
 }
